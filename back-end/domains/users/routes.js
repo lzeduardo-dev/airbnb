@@ -22,29 +22,31 @@ router.get("/", async (req, res) => {
 });
 
 router.get("/profile", async (req, res) => {
+  
   const { token } = req.cookies;
 
   if (token) {
-    try {
-      const userInfo = jwt.verify(token, JWT_SECRET_KEY)
-      
-  
-      res.json(userInfo);
-    } catch (error) {
-      res.status(500).json(error);
-    }
-    
+    jwt.verify(
+      token,
+      JWT_SECRET_KEY,
+      {},
+      (error, userInfo) => {
+        if (error) throw error;
+
+        res.json(userInfo);
+      }
+    );
   } else {
-    res.json(null)
+    res.json(null);
   }
 });
 
 router.post("/", async (req, res) => {
   connectDb();
-
+  
   const { name, email, password } = req.body;
   const encryptedPassword = bcrypt.hashSync(password, bcryptSalt);
-
+  
   try {
     const newUserDoc = await User.create({
       name,
@@ -52,7 +54,12 @@ router.post("/", async (req, res) => {
       password: encryptedPassword,
     });
 
-    res.json(newUserDoc);
+    const {_id} = newUserDoc;
+    const newUserObj = {name, email, _id};
+
+    const token = jwt.sign(newUserObj, JWT_SECRET_KEY)
+
+    res.cookie("token", token).json(newUserObj);
   } catch (error) {
     res.status(500).json(error);
   }
@@ -60,22 +67,21 @@ router.post("/", async (req, res) => {
 
 router.post("/login", async (req, res) => {
   connectDb();
-
+  
   const { email, password } = req.body;
-
+  
   try {
     const userDoc = await User.findOne({ email });
-
+    
     if (userDoc) {
       const passwordCorrect = bcrypt.compareSync(password, userDoc.password);
       const { name, _id } = userDoc;
-
+      
       if (passwordCorrect) {
         const newUserObj = { name, email, _id };
         const token = jwt.sign(newUserObj, JWT_SECRET_KEY);
-
-        console.log({token, JWT_SECRET_KEY });
-
+        
+        
         res.cookie("token", token).json(newUserObj);
       } else {
         res.json("Senha inválida!");
@@ -87,5 +93,9 @@ router.post("/login", async (req, res) => {
     res.status(500).json(error);
   }
 });
+
+router.post("/logout", (req,res) => {
+  res.clearCookie("token").json("Deslogado com sucesso!")
+})
 
 export default router;
