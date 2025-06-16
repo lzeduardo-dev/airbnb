@@ -4,6 +4,8 @@ import User from "./model.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import "dotenv/config";
+  import {JWTVerify} from "../../utils/jwt.js"
+import { JWTSign } from "../../utils/jwt.js";
 
 const router = Router();
 const bcryptSalt = bcrypt.genSaltSync();
@@ -22,23 +24,10 @@ router.get("/", async (req, res) => {
 });
 
 router.get("/profile", async (req, res) => {
+  const userInfo = await JWTVerify(req);
+
+  res.json(userInfo);
   
-  const { token } = req.cookies;
-
-  if (token) {
-    jwt.verify(
-      token,
-      JWT_SECRET_KEY,
-      {},
-      (error, userInfo) => {
-        if (error) throw error;
-
-        res.json(userInfo);
-      }
-    );
-  } else {
-    res.json(null);
-  }
 });
 
 router.post("/", async (req, res) => {
@@ -57,11 +46,19 @@ router.post("/", async (req, res) => {
     const {_id} = newUserDoc;
     const newUserObj = {name, email, _id};
 
-    const token = jwt.sign(newUserObj, JWT_SECRET_KEY)
-
-    res.cookie("token", token).json(newUserObj);
+    console.log(newUserDoc);
+    try {
+      const token = await JWTSign(newUserObj);
+      
+      res.cookie("token", token).json(newUserObj);
+    } catch (error) {
+      
+      res.status(500).json("Erro ao assinar com o JWT", error);
+    }
+    
   } catch (error) {
     res.status(500).json(error);
+    throw error;
   }
 });
 
@@ -79,10 +76,14 @@ router.post("/login", async (req, res) => {
       
       if (passwordCorrect) {
         const newUserObj = { name, email, _id };
-        const token = jwt.sign(newUserObj, JWT_SECRET_KEY);
-        
-        
-        res.cookie("token", token).json(newUserObj);
+        try {
+          const token = await JWTSign(newUserObj);
+          res.cookie("token", token).json(newUserObj);
+          
+        } catch (error) {
+          res.status(500).json("Usuário não encontrado")
+        }
+      
       } else {
         res.json("Senha inválida!");
       }
